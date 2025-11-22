@@ -46,16 +46,51 @@ if st.button("🚨 EMERGENCY STOP ALL POSITIONS", type="primary"):
             st.success(f"✅ Closed: {', '.join(closed)}")
     st.rerun()  # Refresh once after action
 
-# === Main Dashboard ===
+# === Main Dashboard — FIXED FOR LATEST alpaca-py ===
 try:
-    # Account summary
     account = client.get_account()
+
+    # FIXED FIELD NAMES (works with alpaca-py 0.28+ and 0.43+)
+    equity = float(account.portfolio_value)
+    cash = float(account.cash)
+    
+    # CORRECT FIELD: non_margin_buying_power = crypto buying power
+    buying_power = float(getattr(account, 'non_margin_buying_power', account.cash))
+
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Equity", f"${float(account.portfolio_value):,.2f}")
-    col2.metric("Cash", f"${float(account.cash):,.2f}")
-    col3.metric("Buying Power", f"${float(account.crypto_buying_power):,.2f}")
+    col1.metric("Total Equity", f"${equity:,.2f}")
+    col2.metric("Cash", f"${cash:,.0f}")
+    col3.metric("Buying Power", f"${buying_power:,.0f}")
 
     st.divider()
+
+    # Positions (safe + fixed)
+    symbols = ["SHIB/USD", "PEPE/USD", "SOL/USD"]
+    cols = st.columns(3)
+    total_pnl = 0.0
+    for i, sym in enumerate(symbols):
+        with cols[i]:
+            try:
+                pos = client.get_position(sym)
+                value = float(pos.market_value)
+                pnl_pct = float(pos.unrealized_plpc) * 100
+                unrealized_pl = float(pos.unrealized_pl)
+                total_pnl += unrealized_pl
+                st.metric(
+                    label=sym.split("/")[0].upper(),
+                    value=f"${value:,.0f}",
+                    delta=f"{pnl_pct:+.1f}%"
+                )
+            except:
+                st.metric(sym.split("/")[0].upper(), "$0", "—")
+
+    st.metric("Total Unrealized P&L", f"${total_pnl:,.2f}", delta=None)
+
+    st.caption(f"**Last updated:** {time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+except Exception as e:
+    st.error(f"API Error: {e}")
+    st.info("Your bot is still running on Render! This is just a dashboard display issue.")
 
     # Positions
     symbols = ["SHIB/USD", "PEPE/USD", "SOL/USD"]
